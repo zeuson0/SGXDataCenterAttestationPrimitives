@@ -14,7 +14,7 @@
 #include "driver.h"
 
 #include <linux/version.h>
-
+extern void (*k_mmput_async)(struct mm_struct* mm);
 struct task_struct *ksgxswapd_tsk;
 DECLARE_WAIT_QUEUE_HEAD(ksgxswapd_waitq);
 LIST_HEAD(sgx_active_page_list);
@@ -45,6 +45,9 @@ static void sgx_sanitize_section(struct sgx_epc_section *section)
 
 		cond_resched();
 	}
+	spin_lock(&section->lock);
+	list_splice(&secs_list, &section->unsanitized_page_list);
+	spin_unlock(&section->lock);
 }
 
 static int ksgxswapd(void *p)
@@ -172,11 +175,7 @@ static bool sgx_reclaimer_age(struct sgx_epc_page *epc_page)
 		ret = !sgx_encl_test_and_clear_young(encl_mm->mm, page);
 		up_read(&encl_mm->mm->mmap_sem);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0) || LINUX_VERSION_CODE > KERNEL_VERSION(5, 4, 0) )
-		mmput(encl_mm->mm);
-#else
-		mmput_async(encl_mm->mm);
-#endif
+		k_mmput_async(encl_mm->mm);
 
 		if (!ret || (atomic_read(&encl->flags) & SGX_ENCL_DEAD))
 			break;
@@ -223,11 +222,7 @@ retry:
 
 		up_read(&encl_mm->mm->mmap_sem);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0) || LINUX_VERSION_CODE > KERNEL_VERSION(5, 4, 0) )
-		mmput(encl_mm->mm);
-#else
-		mmput_async(encl_mm->mm);
-#endif
+		k_mmput_async(encl_mm->mm);
 	}
 
 	srcu_read_unlock(&encl->srcu, idx);
@@ -303,11 +298,7 @@ static const cpumask_t *sgx_encl_ewb_cpumask(struct sgx_encl *encl)
 
 		cpumask_or(cpumask, cpumask, mm_cpumask(encl_mm->mm));
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0) || LINUX_VERSION_CODE > KERNEL_VERSION(5, 4, 0) )
-		mmput(encl_mm->mm);
-#else
-		mmput_async(encl_mm->mm);
-#endif
+		k_mmput_async(encl_mm->mm);
 	}
 
 	srcu_read_unlock(&encl->srcu, idx);
@@ -469,11 +460,11 @@ void sgx_reclaim_pages(void)
 		continue;
 
 skip:
-		kref_put(&encl_page->encl->refcount, sgx_encl_release);
 
 		spin_lock(&sgx_active_page_list_lock);
 		list_add_tail(&epc_page->list, &sgx_active_page_list);
 		spin_unlock(&sgx_active_page_list_lock);
+		kref_put(&encl_page->encl->refcount, sgx_encl_release);
 
 		chunk[i] = NULL;
 	}

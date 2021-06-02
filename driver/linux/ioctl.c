@@ -66,7 +66,7 @@ static u32 sgx_calc_ssaframesize(u32 miscselect, u64 xfrm)
 	int i;
 
 	for (i = 2; i < 64; i++) {
-		if (!((1 << i) & xfrm))
+		if (!((1UL << i) & xfrm))
 			continue;
 
 		size = SGX_SSA_GPRS_SIZE + sgx_xsave_size_tbl[i];
@@ -332,7 +332,7 @@ static int __sgx_encl_add_page(struct sgx_encl *encl,
 
 	ret = get_user_pages(src, 1, 0, &src_page, NULL);
 	if (ret < 1)
-		return ret;
+		return -EFAULT;
 
 	pginfo.secs = (unsigned long)sgx_epc_addr(encl->secs.epc_page);
 	pginfo.addr = SGX_ENCL_PAGE_ADDR(encl_page);
@@ -459,8 +459,11 @@ err_out_free:
 	 * Destroy enclave on ENCLS failure as this means that EPC has been
 	 * invalidated.
 	 */
-	if (ret == -EIO)
+	if (ret == -EIO){
+		mutex_lock(&encl->lock);
 		sgx_encl_destroy(encl);
+		mutex_unlock(&encl->lock);
+	}
 
 	return ret;
 }
@@ -802,8 +805,10 @@ long sgx_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	if (encl_flags & SGX_ENCL_IOCTL)
 		return -EBUSY;
 
-	if (encl_flags & SGX_ENCL_DEAD)
-		return -EFAULT;
+	if (encl_flags & SGX_ENCL_DEAD){
+		ret = -EFAULT;
+		goto out;
+	}
 
 	switch (cmd) {
 	case SGX_IOC_ENCLAVE_CREATE:
@@ -822,7 +827,7 @@ long sgx_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 		ret = -ENOIOCTLCMD;
 		break;
 	}
-
+out:
 	atomic_andnot(SGX_ENCL_IOCTL, &encl->flags);
 
 	return ret;

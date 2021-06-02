@@ -123,7 +123,7 @@ static unsigned long sgx_get_unmapped_area(struct file *file,
 					   unsigned long pgoff,
 					   unsigned long flags)
 {
-	if (flags & MAP_PRIVATE)
+	if ((flags & MAP_TYPE) == MAP_PRIVATE)
 		return -EINVAL;
 
 	if (flags & MAP_FIXED)
@@ -221,3 +221,11 @@ int __exit sgx_drv_exit(void)
 
 	return 0;
 }
+
+#ifdef CONFIG_ACPI
+static struct acpi_device_id sgx_device_ids[] = {
+	{"INT0E0C", 0},
+	{"", 0},
+};
+MODULE_DEVICE_TABLE(acpi, sgx_device_ids);
+#endif
