@@ -39,7 +39,13 @@
 #include "qcnl_config.h"
 #include "se_memcpy.h"
 #include "sgx_default_qcnl_wrapper.h"
+#ifndef __EMSCRIPTEN__
 #include <curl/curl.h>
+#else
+#include <emscripten.h>
+#include "writer.h"
+#include "stringbuffer.h"
+#endif
 #include <unistd.h>
 
 typedef struct _network_malloc_info_t {
@@ -78,6 +84,7 @@ static size_t write_callback(void *ptr, size_t size, size_t nmemb, void *stream)
  *
  * @return Collateral Network Library Error Codes
  */
+#ifndef __EMSCRIPTEN__
 static sgx_qcnl_error_t curl_error_to_qcnl_error(CURLcode curl_error) {
     switch (curl_error) {
     case CURLE_OK:
@@ -102,6 +109,7 @@ static sgx_qcnl_error_t curl_error_to_qcnl_error(CURLcode curl_error) {
         return SGX_QCNL_NETWORK_ERROR;
     }
 }
+#endif
 
 /**
  * This method converts PCCS HTTP status codes to QCNL error codes
@@ -144,6 +152,7 @@ static sgx_qcnl_error_t pccs_status_to_qcnl_error(long pccs_status_code) {
  *
  * @return SGX_QCNL_SUCCESS Call https post successfully. Other return codes indicate an error occured.
  */
+#ifndef __EMSCRIPTEN__
 sgx_qcnl_error_t qcnl_https_request(const char *url,
                                     http_header_map &header_map,
                                     const char *req_body,
@@ -293,3 +302,128 @@ cleanup:
 
     return ret;
 }
+#else
+EM_JS(char *, dcap_fetch_proxy, (const char *cUrl, const char *cOptions), {
+	return Asyncify.handleSleep(function(wakeUp) {
+		const url = AsciiToString(cUrl);
+		const options = JSON.parse(AsciiToString(cOptions));
+		let headerStr = "";
+		let retJson = {
+			headers : "",
+			body : "",
+			status:-1
+		};
+		fetch(new Request(url), options)
+			.then(async(response) => {
+				retJson.status = response.status;
+				if(response.status === 200)
+				{
+					for (let[key, value] of response.headers)
+					{
+						const tmp = key + ": " + value + "\n";
+						headerStr += tmp;
+					}
+					retJson.headers = headerStr;
+					const text = await response.text();
+					retJson.body = String(text);
+				};
+				const jsonStr = JSON.stringify(retJson);
+				const lengthBytes = lengthBytesUTF8(jsonStr) + 1;
+				const result = _malloc(lengthBytes);
+				stringToUTF8(jsonStr, result, lengthBytes);
+				setTimeout(wakeUp(result), 0);
+			})
+			.catch(error => {
+				const jsonStr = JSON.stringify(retJson);
+				var lengthBytes = lengthBytesUTF8(jsonStr) + 1;
+				var result = _malloc(lengthBytes);
+				stringToUTF8(jsonStr, result, lengthBytes);
+				setTimeout(wakeUp(result), 0);
+			});
+	});
+});
+
+sgx_qcnl_error_t qcnl_https_request(const char *url,
+                                    http_header_map &header_map,
+                                    const char *req_body,
+                                    uint32_t req_body_size,
+                                    const uint8_t *user_token,
+                                    uint16_t user_token_size,
+                                    char **resp_msg,
+                                    uint32_t &resp_size,
+                                    char **resp_header,
+                                    uint32_t &header_size)
+{
+	sgx_qcnl_error_t ret = SGX_QCNL_NETWORK_ERROR;
+    Document optJson;
+    optJson.SetObject();
+    Document::AllocatorType& allocator = optJson.GetAllocator();
+    Value user_token_str(kStringType);
+    Value req_body_str(kStringType);
+    Value headers(kObjectType);
+
+	if (user_token && user_token_size > 0)
+	{
+        headers.AddMember("Content-Type", "application/json",allocator);
+        user_token_str.SetString(reinterpret_cast<const char *>(user_token), user_token_size);
+        headers.AddMember("user-token", user_token_str,allocator);
+	}
+    http_header_map::iterator it = header_map.begin();
+    while (it != header_map.end()) {
+        headers.AddMember(StringRef(it->first.c_str(),it->first.length()), StringRef(it->second.c_str(),it->second.length()),allocator);
+        it++;
+    }
+	if (req_body && req_body_size > 0)
+	{
+        optJson.AddMember("method","POST",allocator);
+        req_body_str.SetString(req_body, req_body_size);
+        optJson.AddMember("body",req_body_str,allocator);
+        optJson.AddMember("Content-Length",req_body_size,allocator);
+	}
+	else
+        optJson.AddMember("method", "GET", allocator);
+    optJson.AddMember("cache", "default", allocator);
+    optJson.AddMember("headers", headers, allocator);
+
+    StringBuffer strBuffer;
+    Writer<StringBuffer> writer(strBuffer);
+    optJson.Accept(writer);
+    std::string options = strBuffer.GetString();
+	char *cstr = dcap_fetch_proxy(url, options.c_str());
+    std::string str(cstr);
+    free(cstr);
+    Document retJson;
+    retJson.Parse(str.c_str());
+
+    if (retJson.HasParseError() || !retJson.IsObject())
+        return ret;
+    if (!retJson.HasMember("status") || !retJson["status"].IsInt())
+        return ret;
+
+    int status = retJson["status"].GetInt();
+    if (status == 200)
+    {
+        if (!retJson.HasMember("headers") || !retJson["headers"].IsString() ||
+            !retJson.HasMember("body") || !retJson["body"].IsString())
+            return ret;
+        std::string retHeader = retJson["headers"].GetString();
+        std::string retBody = retJson["body"].GetString();
+        uint32_t headersLen = retHeader.length();
+        uint32_t bodyLen = retBody.length();
+        *resp_header = (char *)malloc(headersLen);
+        memset(*resp_header, 0, headersLen);
+        *resp_msg = (char *)malloc(bodyLen);
+        memset(*resp_msg, 0, bodyLen);
+        memcpy(*resp_header, retHeader.c_str(), headersLen);
+        header_size = headersLen;
+        memcpy(*resp_msg, retBody.c_str(),bodyLen);
+        resp_size = bodyLen;
+        ret = SGX_QCNL_SUCCESS;
+    }
+    else if (status == -1)
+            ret = SGX_QCNL_NETWORK_ERROR;
+    else
+        ret = pccs_status_to_qcnl_error(status);
+    return ret;
+}
+#endif

@@ -55,7 +55,10 @@ ifdef SELF_SIGNED_CERT
 CNL_Lib_Cpp_Flags+= -DSELF_SIGNED_CERT
 endif
 
-CNL_Lib_Link_Flags := $(SGX_COMMON_FLAGS) -g -L$(TOP_DIR)/build/linux -L$(SGX_SDK)/lib64 -lpthread -ldl -lcurl
+CNL_Lib_Link_Flags := $(SGX_COMMON_FLAGS) -g -L$(TOP_DIR)/build/linux -L$(SGX_SDK)/lib64 -lpthread
+ifndef WASM
+CNL_Lib_Link_Flags += -ldl -lcurl
+endif
  
 ifndef DEBUG
 CNL_Lib_Cpp_Flags += -DDISABLE_TRACE

@@ -75,7 +75,7 @@ protected:
     // custom request options for Azure
     Document custom_request_options_;
 
-    QcnlConfig() : server_url_("https://localhost:8081/sgx/certification/v3/"),
+    QcnlConfig() : server_url_("https://sgx-dcap-server.cn-hangzhou.aliyuncs.com/sgx/certification/v3/"),
                    use_secure_cert_(true),
                    collateral_service_url_(server_url_),
                    collateral_version_("3.0"),

@@ -361,6 +361,7 @@ quote3_error_t tee_get_verification_supplemental_data_size(
     tee_qv_base *p_trusted_qv = NULL;
     tee_qv_base *p_untrusted_qv = NULL;
 
+#ifndef __EMSCRIPTEN__
     do {
         //create and initialize QvE
         //
@@ -405,6 +406,17 @@ quote3_error_t tee_get_verification_supplemental_data_size(
         }
 
     } while (0);
+#else
+
+    if (tee_type == SGX_EVIDENCE)
+    {
+        p_untrusted_qv = new sgx_qv();
+    }
+    else if (tee_type == TDX_EVIDENCE)
+    {
+        p_untrusted_qv = new tdx_qv();
+    }
+#endif
 
     do {
         //call untrusted API to get supplemental data version
@@ -519,6 +531,7 @@ quote3_error_t tee_verify_evidence(
     tee_qv_base *p_tee_qv = NULL;
 
     do {
+#ifndef __EMSCRIPTEN__
         if (p_qve_report_info) {
             //try to load QvE for trusted quote verification
             //
@@ -551,7 +564,9 @@ quote3_error_t tee_verify_evidence(
 
         //untrsuted quote verification
         //
-        else {
+        else
+#endif
+        {
             try {
                 if (tee_type == SGX_EVIDENCE)
                     p_tee_qv = new sgx_qv();

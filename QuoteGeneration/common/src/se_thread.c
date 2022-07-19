@@ -59,6 +59,19 @@ int	se_tls_set_value(se_tls_index_t tls_index, void *tls_value) { return TlsSetV
 
 void se_mutex_init(se_mutex_t* mutex)
 {
+#ifdef __EMSCRIPTEN__
+    pthread_mutexattr_t attr;
+    int r;
+
+    pthread_mutexattr_init(&attr);
+
+    r = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+
+    if (r == 0)
+        r = pthread_mutex_init(mutex, &attr);
+
+    pthread_mutexattr_destroy(&attr);
+#else
 #ifdef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
     se_mutex_t tmp = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 #elif defined(PTHREAD_RECURSIVE_MUTEX_INITIALIZER)
@@ -69,6 +82,7 @@ void se_mutex_init(se_mutex_t* mutex)
 
     /* C doesn't allow `*mutex = PTHREAD_..._INITIALIZER'.*/
     memcpy(mutex, &tmp, sizeof(tmp));
+#endif
 }
 
 int se_mutex_lock(se_mutex_t* mutex) { return (0 == pthread_mutex_lock(mutex)); }
@@ -85,8 +99,11 @@ int se_thread_cond_wait(se_cond_t *cond, se_mutex_t *mutex){return (0 == pthread
 int se_thread_cond_signal(se_cond_t *cond){return (0 == pthread_cond_signal(cond));}
 int se_thread_cond_broadcast(se_cond_t *cond){return (0 == pthread_cond_broadcast(cond));}
 int se_thread_cond_destroy(se_cond_t* cond){return (0 == pthread_cond_destroy(cond));}
-
+#ifndef __EMSCRIPTEN__
 unsigned int se_get_threadid(void) { return (unsigned)syscall(__NR_gettid);}
+#else
+unsigned int se_get_threadid(void) { return (unsigned)gettid();}
+#endif
 /* tls functions */
 int se_tls_alloc(se_tls_index_t *tls_index) { return !pthread_key_create(tls_index, NULL); }
 int se_tls_free(se_tls_index_t tls_index) { return !pthread_key_delete(tls_index); }

@@ -42,7 +42,7 @@
 #define FALSE	0
 #define TRUE	1
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__EMSCRIPTEN__)
 #include <stdint.h>
 typedef int32_t	    int_fast32_t;
 typedef int64_t     int_fast64_t;

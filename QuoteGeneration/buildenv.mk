@@ -104,11 +104,15 @@ ifeq ($(CC_NO_LESS_THAN_8), 1)
 endif
 
 # turn on stack protector for SDK
+ifndef WASM
 CC_BELOW_4_9 := $(shell expr "`$(CC) -dumpversion`" \< "4.9")
 ifeq ($(CC_BELOW_4_9), 1)
     COMMON_FLAGS += -fstack-protector
 else
     COMMON_FLAGS += -fstack-protector-strong
+endif
+else
+    COMMON_FLAGS += -fno-stack-protector
 endif
 
 ifdef DEBUG

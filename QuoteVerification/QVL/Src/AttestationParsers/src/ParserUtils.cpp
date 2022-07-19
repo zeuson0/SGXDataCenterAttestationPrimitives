@@ -177,7 +177,9 @@ std::string getNameEntry(X509_NAME* name, int nid)
 std::time_t asn1TimeToTimet(
         const ASN1_TIME* asn1Time)
 {
+#ifndef __EMSCRIPTEN__
     static_assert(sizeof(std::time_t) >= sizeof(int64_t), "std::time_t size too small, the dates may overflow");
+#endif
     static constexpr int64_t SECONDS_IN_A_DAY = 24 * 60 * 60;
 
     int pday;

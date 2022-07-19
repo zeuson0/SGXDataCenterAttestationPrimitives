@@ -57,8 +57,15 @@ QVL_SRC_PATH 			?= $(DCAP_QV_DIR)/QVL/Src
 SGXSSL_PACKAGE_PATH 	?= $(DCAP_QV_DIR)/sgxssl/Linux/package
 PREBUILD_OPENSSL_PATH	?= $(DCAP_QV_DIR)/../prebuilt/openssl
 
-SGX_COMMON_CFLAGS := $(COMMON_FLAGS) -m64 -Wjump-misses-init -Wstrict-prototypes -Wunsuffixed-float-constants
-SGX_COMMON_CXXFLAGS := $(COMMON_FLAGS) -m64 -Wnon-virtual-dtor -std=c++14
+SGX_COMMON_CFLAGS := $(COMMON_FLAGS)  -Wjump-misses-init -Wstrict-prototypes -Wunsuffixed-float-constants
+SGX_COMMON_CXXFLAGS := $(COMMON_FLAGS) -Wnon-virtual-dtor -std=c++14
+ifdef WASM
+SGX_COMMON_CFLAGS += -m32
+SGX_COMMON_CXXFLAGS += -m32
+else
+SGX_COMMON_CFLAGS += -m64
+SGX_COMMON_CXXFLAGS += -m64
+endif
 
 
 QVL_LIB_PATH := $(QVL_SRC_PATH)/AttestationLibrary

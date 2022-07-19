@@ -114,11 +114,11 @@ $(QVL_VERIFY_C_OBJS): %.o: %.c qve_u.c
 	@echo "CC  <=  $<"
 
 $(QVL_VERIFY_CPP_OBJS): %.o: %.cpp qve_u.h
-	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(QVL_VERIFY_INC) -c $< -o $@
+	@$(CXX) $(SGX_COMMON_CXXFLAGS) $(QVL_VERIFY_INC) -I../../../QuoteGeneration/qpl/inc -c $< -o $@
 	@echo "CXX  <=  $<"
 
 $(QVL_VERIFY_CPP_OBJS_STATIC): %_s.o: %.cpp qve_u.h
-	@$(CXX) -DGEN_STATIC $(SGX_COMMON_CXXFLAGS) $(QVL_VERIFY_INC) -c $< -o $@
+	@$(CXX) -DGEN_STATIC $(SGX_COMMON_CXXFLAGS) $(QVL_VERIFY_INC) -I../../../QuoteGeneration/qpl/inc -c $< -o $@
 	@echo "CXX  <=  $<"
 
 $(QVE_CPP_OBJ): $(QVE_CPP_SRC)

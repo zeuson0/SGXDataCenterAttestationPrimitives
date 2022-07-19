@@ -38,14 +38,15 @@
 #include "istreamwrapper.h"
 #include "qcnl_config.h"
 #include <algorithm>
-#include <curl/curl.h>
 #include <fstream>
-
+#ifndef __EMSCRIPTEN__
+#include <curl/curl.h>
 static struct init_solib {
     init_solib() {
         curl_global_init(CURL_GLOBAL_DEFAULT);
     }
 } _init_solib;
+#endif
 
 bool QcnlConfigLegacy::load_config() {
     // read configuration File
